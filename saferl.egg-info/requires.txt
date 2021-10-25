@@ -1,0 +1,3 @@
+rllib@ git+ssh://git@github.com/sebascuri/rllib@dev#egg=rllib
+hucrl@ git+ssh://git@github.com/sebascuri/hucrl@dev#egg=hucrl
+safety_gym@ git+ssh://git@github.com/openai/safety-gym
