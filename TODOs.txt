@@ -1,0 +1,9 @@
+TODOs:
+
+- Create two environments: Inverted Pendulum, Half Cheetah, Safe Gym ?. 
+- Create extra costs entry for datapoints.
+- Create data collection/interaction pipelines that log the costs. 
+- Create an utility that given rewards and costs it concatenates them into a vector.
+- Create multi-output Q functions. 
+- Create a model for costs besides constraints as well as learning algorithms. 
+- Shooting + Rejection sampling baseline.  
