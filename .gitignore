@@ -1,6 +1,7 @@
 # IntelliJ
 .idea
 .DS_Store
+src/ 
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
