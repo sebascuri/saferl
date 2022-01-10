@@ -10,7 +10,7 @@ from rllib.dataset.datatypes import Loss
 from rllib.util.losses.pathwise_loss import PathwiseLoss
 from rllib.util.utilities import sample_action
 
-from saferl.utilities.lagrangian import LagrangianReduction
+from saferl.utilities.multi_objective_reduction import LagrangianReduction
 from saferl.utilities.utilities import get_q_value_pathwise_gradients
 
 
@@ -78,6 +78,8 @@ class MaximallySafeMPC(CEMShooting):
         max_actions = self._get_action_by_index(action_sequence, idx)
         idx = torch.topk(cost, k=self.num_elites, largest=False, dim=-1)[1]
         min_actions = self._get_action_by_index(action_sequence, idx)
+
         actions = min_actions[..., : -self.h_dim_action[0]]
         hall_actions = max_actions[..., -self.h_dim_action[0] :]
+
         return torch.cat((actions, hall_actions), dim=-1)

@@ -18,7 +18,7 @@ class PendulumReward(AbstractModel):
         self.reward_offset = 0
         self.indicator = indicator
 
-    def forward(self, state, action, next_state):
+    def forward(self, state, action, next_state=None):
         """See `abstract_reward.forward'."""
         if not isinstance(state, torch.Tensor):
             state = torch.tensor(state, dtype=torch.get_default_dtype())
@@ -34,6 +34,8 @@ class PendulumReward(AbstractModel):
 
         action_tolerance = tolerance(action[..., 0], lower=-0.1, upper=0.1, margin=0.1)
         action_cost = self.action_cost * (action_tolerance - 1)
+
+        # action_cost = -self.action_cost * action[..., 0] ** 2
 
         if self.indicator:
             cost = torch.stack(
@@ -56,12 +58,13 @@ class PendulumReward(AbstractModel):
         return cost, torch.zeros(self.dim_reward)
 
 
-def get_pendulum_environment(action_cost=0.0, initial_distribution=None):
+def get_pendulum_environment(
+    action_cost=0.0,
+    initial_distribution=torch.distributions.Uniform(
+        torch.tensor([-1.2 * np.pi, -0.001]), torch.tensor([0, +0.001])
+    ),
+):
     """Get pendulum environment."""
-    if initial_distribution is None:
-        initial_distribution = torch.distributions.Uniform(
-            torch.tensor([-1.2 * np.pi, -0.001]), torch.tensor([0, +0.001])
-        )
     env = SystemEnvironment(
         system=InvertedPendulum(mass=0.3, length=0.5, friction=0.005, step_size=1 / 80),
         initial_state=initial_distribution.sample,

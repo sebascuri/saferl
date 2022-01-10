@@ -12,10 +12,11 @@ from rllib.model.closed_loop_model import ClosedLoopModel
 from rllib.util.losses.pathwise_loss import PathwiseLoss
 from rllib.util.rollout import rollout_actions
 from rllib.util.utilities import sample_action
+from rllib.util.neural_networks.utilities import repeat_along_dimension
 from rllib.util.value_estimation import discount_sum
 from torch.distributions import MultivariateNormal
 
-from saferl.utilities.lagrangian import LagrangianReduction
+from saferl.utilities.multi_objective_reduction import LagrangianReduction
 from saferl.utilities.utilities import get_q_value_pathwise_gradients
 
 
@@ -23,6 +24,7 @@ class VerifySafeLoss(PathwiseLoss):
     """
     policy is fixed.
     gradient ascent on J_i  w.r.t. hallucination policy.
+    gradient ascent on J_i w.r.t. lambda.
     """
 
     multi_objective_reduction: LagrangianReduction
@@ -62,10 +64,10 @@ class VerifySafeMPC(CEMShooting):
         """
         cost = returns[..., 1:]
 
-        valid_indexes = torch.where(torch.all(cost <= 0, axis=-1))[0]
-        invalid_indexes = torch.where(~torch.all(cost <= 0, axis=-1))[0]
+        valid_indexes = torch.where(torch.all(cost <= 0, dim=-1))[0]
+        invalid_indexes = torch.where(~torch.all(cost <= 0, dim=-1))[0]
 
-        returns[valid_indexes] = cost.sum(-1)
+        returns[valid_indexes] = cost[valid_indexes].sum(-1)
         returns[invalid_indexes] = -float("inf")
 
         idx = torch.topk(
@@ -91,16 +93,15 @@ def verify(
     num_samples=1000,
 ):
     """Verify if a policy is safe."""
+    state = repeat_along_dimension(state, number=num_samples, dim=-2)
+
     if isinstance(dynamical_model, HallucinatedModel):
         h_dim = state.shape[-1]
         action_distribution = MultivariateNormal(torch.zeros(h_dim), torch.eye(h_dim))
-        action_sequence = action_distribution.sample((num_samples,))
-        action_sequence = action_sequence.permute(
-            tuple(torch.arange(1, action_sequence.dim() - 1)) + (0, -1)
-        )
-        action_sequence = action_sequence.clamp(-1.0, 1.0)
+        sample_shape = (horizon, num_samples)
+        action_sequence = action_distribution.sample(sample_shape).clamp(-1.0, 1.0)
     else:
-        action_sequence = torch.zeros((horizon, 0))
+        action_sequence = torch.zeros((horizon, num_samples, 0))
     dynamical_model = ClosedLoopModel(dynamical_model, policy)
     reward_model = ClosedLoopModel(reward_model, policy)
 
@@ -108,7 +109,7 @@ def verify(
         rollout_actions(
             dynamical_model,
             reward_model,
-            action_sequence,  # scale actions.
+            action_sequence,
             state,
             termination_model,
         ),
@@ -116,9 +117,13 @@ def verify(
     )
 
     returns = discount_sum(trajectory.reward, gamma)
-
     if terminal_reward:
         terminal_reward = terminal_reward(trajectory.next_state[..., -1, :])
+        if terminal_reward.dim() > returns.dim():
+            # the terminal reward is an ensemble.
+            terminal_reward = terminal_reward.min(dim=-1)[0]
         returns = returns + gamma ** horizon * terminal_reward
     cost = returns[..., 1:]
-    return torch.any(torch.all(cost <= 0, dim=-1))
+
+    is_safe = torch.all(torch.all(cost <= 0, dim=-1))
+    return is_safe, trajectory

@@ -8,7 +8,7 @@ from rllib.dataset.datatypes import Loss, Observation
 from rllib.util.losses.pathwise_loss import PathwiseLoss
 from rllib.util.utilities import sample_action
 
-from saferl.utilities.lagrangian import LagrangianReduction
+from saferl.utilities.multi_objective_reduction import LagrangianReduction
 from saferl.utilities.utilities import get_q_value_pathwise_gradients
 
 
@@ -22,7 +22,10 @@ class SafeRLPathwiseLoss(PathwiseLoss):
             self.critic, state, action, self.multi_objective_reduction
         )
 
-        return Loss(policy_loss=-q, dual_loss=self.multi_objective_reduction.lagrangian)
+        return Loss(
+            policy_loss=-q,
+            dual_loss=self.multi_objective_reduction.lagrangian.mean(dim=-1),
+        )
 
 
 class SafeRLAlgorithm(DerivedAlgorithm):

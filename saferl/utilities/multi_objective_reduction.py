@@ -20,3 +20,29 @@ class LagrangianReduction(AbstractMultiObjectiveReduction):
         self.lagrangian = loss.dual_loss.mean(dim=self.dim)
         # maximize the loss while minimizing the constraints.
         return base - loss.reg_loss.sum(dim=self.dim)
+
+
+class CostReduction(AbstractMultiObjectiveReduction):
+    """Multi-objective reduction that returns the costs."""
+
+    def __init__(self, dim=2):
+        super(CostReduction, self).__init__(dim=dim)
+
+    def __call__(self, value):
+        """Reduce the value."""
+        cost = value[..., 1:]
+        # maximize the constraints.
+        return cost.sum(dim=self.dim)
+
+
+class NegCostReduction(AbstractMultiObjectiveReduction):
+    """Multi-objective reduction that returns the costs."""
+
+    def __init__(self, dim=2):
+        super(NegCostReduction, self).__init__(dim=dim)
+
+    def __call__(self, value):
+        """Reduce the value."""
+        cost = value[..., 1:]
+        # minimize the constraints.
+        return -cost.sum(dim=self.dim)
