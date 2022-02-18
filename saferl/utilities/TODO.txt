@@ -1,2 +1,0 @@
-Have a function that merges rewards with costs.
-Have a function to rollout the environment that stores the costs.

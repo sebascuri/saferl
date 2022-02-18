@@ -32,7 +32,7 @@ setup(
     install_requires=[
         "rllib @ git+ssh://git@github.com/sebascuri/rllib@dev#egg=rllib",
         "hucrl @ git+ssh://git@github.com/sebascuri/hucrl@dev#egg=hucrl",
-        "safety_gym @ git+ssh://git@github.com/openai/safety-gym#egg=safety_gym"
+        # "safety_gym @ git+ssh://git@github.com/openai/safety-gym#egg=safety_gym"
     ],
     classifiers=[
         # How mature is this project? Common values are
