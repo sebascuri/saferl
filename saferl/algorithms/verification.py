@@ -10,9 +10,9 @@ from rllib.dataset.datatypes import Loss
 from rllib.dataset.utilities import stack_list_of_tuples
 from rllib.model.closed_loop_model import ClosedLoopModel
 from rllib.util.losses.pathwise_loss import PathwiseLoss
+from rllib.util.neural_networks.utilities import repeat_along_dimension
 from rllib.util.rollout import rollout_actions
 from rllib.util.utilities import sample_action
-from rllib.util.neural_networks.utilities import repeat_along_dimension
 from rllib.util.value_estimation import discount_sum
 from torch.distributions import MultivariateNormal
 

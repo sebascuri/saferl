@@ -1,8 +1,8 @@
+import torch
+from rllib.dataset.datatypes import TupleDistribution
 from rllib.policy import AbstractPolicy
 from torch import Tensor
 from torch.distributions import Categorical
-from rllib.dataset.datatypes import TupleDistribution
-import torch
 
 
 class MixturePolicy(AbstractPolicy):

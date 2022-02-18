@@ -5,13 +5,14 @@ Maximize J^pi, for hallucination
 import torch
 from hucrl.model.hallucinated_model import HallucinatedModel
 from hucrl.policy.augmented_policy import AugmentedPolicy
+from rllib.algorithms.data_augmentation import DataAugmentation
 from rllib.algorithms.mpc import CEMShooting
+from rllib.algorithms.sac import SAC
 from rllib.dataset.datatypes import Loss
-from rllib.util.losses.pathwise_loss import PathwiseLoss
+from rllib.util.losses.pathwise_loss import PathwiseLoss, get_q_value_pathwise_gradients
 from rllib.util.utilities import sample_action
 
-from saferl.utilities.multi_objective_reduction import LagrangianReduction
-from saferl.utilities.utilities import get_q_value_pathwise_gradients
+from saferl.utilities.multi_objective_reduction import NegCostReduction
 
 
 class MaximallySafeLoss(PathwiseLoss):
@@ -23,7 +24,7 @@ class MaximallySafeLoss(PathwiseLoss):
 
     policy: AugmentedPolicy
 
-    multi_objective_reduction: LagrangianReduction
+    multi_objective_reduction: NegCostReduction
 
     def forward(self, observation, **kwargs):
         state = observation.state
@@ -37,7 +38,10 @@ class MaximallySafeLoss(PathwiseLoss):
                 self.critic, state, action, self.multi_objective_reduction
             )
 
-            q_true = torch.cat((true_action, hall_action.detach()), dim=-1)
+            action = torch.cat((true_action, hall_action.detach()), dim=-1)
+            q_true = get_q_value_pathwise_gradients(
+                self.critic, state, action, self.multi_objective_reduction
+            )
             # we are doing gradient ascent w.r.t. the hallucinated actions and gradient
             # descent w.r.t the true actions.
             policy_loss = -q_true + q_hall
@@ -47,9 +51,7 @@ class MaximallySafeLoss(PathwiseLoss):
                 self.critic, state, action, self.multi_objective_reduction
             )
             policy_loss = -q
-        return Loss(
-            policy_loss=policy_loss, dual_loss=self.multi_objective_reduction.lagrangian
-        )
+        return Loss(policy_loss=policy_loss)
 
 
 class MaximallySafeMPC(CEMShooting):
@@ -83,3 +85,22 @@ class MaximallySafeMPC(CEMShooting):
         hall_actions = max_actions[..., -self.h_dim_action[0] :]
 
         return torch.cat((actions, hall_actions), dim=-1)
+
+
+class MaximallySafeSAC(SAC):
+    def __init__(self, multi_objective_reduction=NegCostReduction(), *args, **kwargs):
+        super().__init__(
+            multi_objective_reduction=multi_objective_reduction, *args, **kwargs
+        )
+        self.pathwise_loss = MaximallySafeLoss(
+            policy=self.policy,
+            critic=self.critic,
+            multi_objective_reduction=self.multi_objective_reduction,
+        )
+
+
+class MaximallySafeDADPG(DataAugmentation):
+    def __init__(self, *args, **kwargs):
+        super().__init__(
+            base_algorithm=MaximallySafeSAC(*args, **kwargs), *args, **kwargs
+        )

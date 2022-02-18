@@ -5,6 +5,14 @@ from rllib.util.multi_objective_reduction import AbstractMultiObjectiveReduction
 
 
 class LagrangianReduction(AbstractMultiObjectiveReduction):
+    """The lagrangian reduction uses a lagrangian loss.
+
+    The Lagrangian Loss is for inequalities:
+        g(x) - c < epsilon,
+    i.e., negative g(x) is good.
+
+    """
+
     def __init__(self, components=1, dim=2):
         super(LagrangianReduction, self).__init__(dim=dim)
         self._lagrangian = LagrangianLoss(
@@ -12,7 +20,7 @@ class LagrangianReduction(AbstractMultiObjectiveReduction):
         )
         self.lagrangian = torch.zeros(components)
 
-    def __call__(self, value):
+    def forward(self, value):
         """Reduce the value."""
         base = value[..., 0]
         others = value[..., 1:]
@@ -28,7 +36,7 @@ class CostReduction(AbstractMultiObjectiveReduction):
     def __init__(self, dim=2):
         super(CostReduction, self).__init__(dim=dim)
 
-    def __call__(self, value):
+    def forward(self, value):
         """Reduce the value."""
         cost = value[..., 1:]
         # maximize the constraints.
@@ -36,12 +44,15 @@ class CostReduction(AbstractMultiObjectiveReduction):
 
 
 class NegCostReduction(AbstractMultiObjectiveReduction):
-    """Multi-objective reduction that returns the costs."""
+    """Multi-objective reduction that returns the costs.
+
+    This is useful when maximizing the safety constraints.
+    """
 
     def __init__(self, dim=2):
         super(NegCostReduction, self).__init__(dim=dim)
 
-    def __call__(self, value):
+    def forward(self, value):
         """Reduce the value."""
         cost = value[..., 1:]
         # minimize the constraints.

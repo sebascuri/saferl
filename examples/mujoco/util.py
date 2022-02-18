@@ -16,7 +16,8 @@ def parse_config_file(file_dir):
 class MujocoReward(LocomotionReward):
     """Reward for Inverted Pendulum."""
 
-    def __init__(self,
+    def __init__(
+        self,
         dim_action,
         ctrl_cost_weight,
         forward_reward_weight=1.0,
