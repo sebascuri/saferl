@@ -1,16 +1,13 @@
-from itertools import chain
-
+from rllib.agent import SACAgent
 from rllib.agent.model_based.model_based_agent import ModelBasedAgent
-from rllib.algorithms.dpg import DPG
-from rllib.dataset.experience_replay import BootstrapExperienceReplay, ExperienceReplay
-from rllib.model.ensemble_model import EnsembleModel
-from rllib.policy.nn_policy import NNPolicy
-from rllib.value_function.nn_value_function import NNQFunction
-from torch.optim import Adam
-
-from saferl.algorithms.algorithm_list import AlgorithmList
-from saferl.algorithms.maximally_safe import MaximallySafeDADPG
+from rllib.dataset.experience_replay import ExperienceReplay
 from saferl.algorithms.safety_filter import SafetyFilterMPC
+from saferl.utilities.multi_objective_reduction import (
+    LagrangianReduction,
+    NegCostReduction,
+)
+from saferl.utilities.losses import CMDPPathwiseLoss, MaximallySafeLoss
+from rllib.policy.mpc_policy import MPCPolicy
 
 
 class SafetyFilterAgent(ModelBasedAgent):
@@ -18,136 +15,99 @@ class SafetyFilterAgent(ModelBasedAgent):
         self,
         dynamical_model,
         reward_model,
-        guidance_policy,
-        guidance_critic,
-        safe_policy,
-        safety_critic,
+        guidance_agent,
+        maximally_safe_agent,
         xi=-0.0001,
-        gamma=0.9,
-        memory=None,
+        gamma=0.99,
         *args,
         **kwargs
     ):
-        if memory is None:
-            if isinstance(dynamical_model.base_model, EnsembleModel):
-                memory = BootstrapExperienceReplay(
-                    num_bootstraps=dynamical_model.base_model.num_heads,
-                    max_len=100000,
-                    num_steps=0,
-                    bootstrap=True,
-                )
-            else:
-                memory = ExperienceReplay(
-                    max_len=100000,
-                    num_steps=0,
-                )
-
-        kwargs.pop("base_algorithm", None)
-
-        mpc_kwargs = kwargs.copy()
-        mpc_kwargs.pop("num_samples", 1)
-        mpc_kwargs.pop("num_iter", 1)
-        mpc_kwargs.pop("horizon", 1)
-        planner = SafetyFilterMPC(
+        kwargs.pop("policy", None)
+        memory = ExperienceReplay(max_len=100000, num_memory_steps=0)
+        safety_filter = SafetyFilterMPC(
             dynamical_model=dynamical_model,
             reward_model=reward_model,
-            policy=guidance_policy,
-            safety_critic=safety_critic,
-            safe_policy=safe_policy,
-            horizon=1,
-            num_samples=1,
-            num_iter=1,
+            policy=guidance_agent.policy,
+            safety_critic=maximally_safe_agent.algorithm.critic,
+            safe_policy=maximally_safe_agent.algorithm.policy,
             xi=xi,
             gamma=gamma,
             *args,
-            **mpc_kwargs,
+            **kwargs,
         )
-        algorithm = AlgorithmList(
-            [
-                # SAC(
-                #     memory=memory,
-                #     dynamical_model=dynamical_model,
-                #     reward_model=reward_model,
-                #     policy=guidance_policy,
-                #     critic=guidance_critic,
-                #     gamma=gamma,
-                #     num_memory_samples=4,
-                #     *args,
-                #     **kwargs,
-                # ),
-                # SAC(
-                #     memory=memory,
-                #     dynamical_model=dynamical_model,
-                #     reward_model=reward_model,
-                #     policy=guidance_policy,
-                #     critic=safety_critic,
-                #     gamma=gamma,
-                #     num_memory_samples=4,
-                #     *args,
-                #     **kwargs,
-                # ),
-            ]
-        )
+        policy = MPCPolicy(mpc_solver=safety_filter, solver_frequency=1)
+
+        self.guidance_agent = guidance_agent
+        self.maximally_safe_agent = maximally_safe_agent
+
+        self.guidance_agent.model_learning_algorithm = None
+        self.maximally_safe_agent.model_learning_algorithm = None
 
         super(SafetyFilterAgent, self).__init__(
             memory=memory,
             dynamical_model=dynamical_model,
             reward_model=reward_model,
-            planning_algorithm=planner,
+            policy=policy,
             gamma=gamma,
+            simulation_frequency=0,
             *args,
             **kwargs,
         )
 
-        self.algorithm = algorithm
-        self.optimizer = type(self.optimizer)(
-            [
-                p
-                for name, p in algorithm.named_parameters()
-                if (
-                    "model" not in name
-                    and "target" not in name
-                    and "old_policy" not in name
-                    and p.requires_grad
-                )
-            ],
-            **self.optimizer.defaults,
+    def __str__(self):
+        return (
+            super().__str__()
+            + str(self.guidance_agent)
+            + str(self.maximally_safe_agent)
         )
+
+    def observe(self, observation):
+        super().observe(observation.clone())
+        self.guidance_agent.observe(observation.clone())
+        self.maximally_safe_agent.observe(observation.clone())
+
+    def start_episode(self):
+        super().start_episode()
+        self.guidance_agent.start_episode()
+        self.maximally_safe_agent.start_episode()
+
+    def end_episode(self) -> None:
+        super().end_episode()
+        self.guidance_agent.end_episode()
+        self.maximally_safe_agent.end_episode()
+
+    def end_interaction(self) -> None:
+        super().end_interaction()
+        self.guidance_agent.end_interaction()
+        self.maximally_safe_agent.end_interaction()
 
     @classmethod
     def default(
         cls,
         environment,
-        guidance_policy=None,
-        guidance_critic=None,
-        safe_policy=None,
-        safety_critic=None,
-        lr=1e-3,
-        cmdp_algorithm=DPG,
-        memory=None,
+        guidance_agent=None,
+        maximally_safe_agent=None,
         *args,
         **kwargs
     ):
-        if guidance_policy is None:
-            guidance_policy = NNPolicy.default(environment, *args, **kwargs)
-        if safe_policy is None:
-            safe_policy = NNPolicy.default(environment, *args, **kwargs)
-        if guidance_critic is None:
-            guidance_critic = NNQFunction.default(environment, *args, **kwargs)
-        if safety_critic is None:
-            safety_critic = NNQFunction.default(environment, *args, **kwargs)
-
+        if guidance_agent is None:
+            guidance_agent = SACAgent.default(
+                environment,
+                pathwise_loss_class=CMDPPathwiseLoss,
+                multi_objective_reduction=LagrangianReduction(
+                    components=environment.dim_reward[0] - 1
+                ),
+            )
+        if maximally_safe_agent is None:
+            maximally_safe_agent = SACAgent.default(
+                environment,
+                pathwise_loss_class=MaximallySafeLoss,
+                multi_objective_reduction=NegCostReduction(),
+            )
         return super().default(
             environment,
-            memory=memory,
-            guidance_policy=guidance_policy,
-            guidance_critic=guidance_critic,
-            safe_policy=safe_policy,
-            safety_critic=safety_critic,
-            cmdp_algorithm=cmdp_algorithm,
-            optimizer=Adam(
-                chain(guidance_policy.parameters(), guidance_critic.parameters()), lr=lr
-            ),
+            guidance_agent=guidance_agent,
+            maximally_safe_agent=maximally_safe_agent,
             *args,
             **kwargs,
         )

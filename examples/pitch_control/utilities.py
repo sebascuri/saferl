@@ -1,13 +1,11 @@
 from saferl.environment.pitch_control import PitchControlReward
 import matplotlib.pyplot as plt
-from typing import List
-from rllib.dataset.datatypes import Observation
 from rllib.value_function.integrate_q_value_function import IntegrateQValueFunction
 
 import torch
 import argparse
 import os
-from saferl.algorithms.safe_cem import SafeCEM
+from saferl.algorithms.safe_mpc import SafeMPC
 from saferl.algorithms.safety_filter import SafetyFilterMPC
 from rllib.policy.mpc_policy import MPCPolicy
 
@@ -59,10 +57,7 @@ def get_parser():
     )
 
     parser.add_argument(
-        "--xi",
-        type=float,
-        default=-0.001,
-        help="Safety filter parameter.",
+        "--xi", type=float, default=-0.001, help="Safety filter parameter.",
     )
     return parser
 
@@ -90,7 +85,7 @@ def load_policy(env, args, name=None):
         policy = ZeroPolicy.default(env)
     elif name == "safe_mpc":
         model = load_model(env, args)
-        safe_mpc = SafeCEM(dynamical_model=model, reward_model=PitchControlReward())
+        safe_mpc = SafeMPC(dynamical_model=model, reward_model=PitchControlReward())
         policy = MPCPolicy(safe_mpc)
     elif name == "safety_filter":
         model = load_model(env, args)

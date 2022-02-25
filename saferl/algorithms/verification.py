@@ -4,46 +4,13 @@ Maximize J^pi, for hallucination
 """
 import torch
 from hucrl.model.hallucinated_model import HallucinatedModel
-from hucrl.policy.augmented_policy import AugmentedPolicy
 from rllib.algorithms.mpc import CEMShooting
-from rllib.dataset.datatypes import Loss
 from rllib.dataset.utilities import stack_list_of_tuples
 from rllib.model.closed_loop_model import ClosedLoopModel
-from rllib.util.losses.pathwise_loss import PathwiseLoss
 from rllib.util.neural_networks.utilities import repeat_along_dimension
 from rllib.util.rollout import rollout_actions
-from rllib.util.utilities import sample_action
 from rllib.util.value_estimation import discount_sum
 from torch.distributions import MultivariateNormal
-
-from saferl.utilities.multi_objective_reduction import LagrangianReduction
-from saferl.utilities.utilities import get_q_value_pathwise_gradients
-
-
-class VerifySafeLoss(PathwiseLoss):
-    """
-    policy is fixed.
-    gradient ascent on J_i  w.r.t. hallucination policy.
-    gradient ascent on J_i w.r.t. lambda.
-    """
-
-    multi_objective_reduction: LagrangianReduction
-
-    def forward(self, observation, **kwargs):
-        state = observation.state
-
-        if isinstance(self.policy, AugmentedPolicy):
-            true_action = sample_action(self.policy.true_policy, state).detach()
-            hall_action = sample_action(self.policy.hallucination_policy, state)
-            action = torch.cat((true_action, hall_action), dim=-1)
-        else:
-            action = sample_action(self.policy, state).detach()
-        q = get_q_value_pathwise_gradients(
-            self.critic, state, action, self.multi_objective_reduction
-        )
-
-        # we are doing gradient ascent w.r.t. the hallucinated actions.
-        return Loss(policy_loss=+q, dual_loss=self.multi_objective_reduction.lagrangian)
 
 
 class VerifySafeMPC(CEMShooting):
@@ -107,11 +74,7 @@ def verify(
 
     trajectory = stack_list_of_tuples(
         rollout_actions(
-            dynamical_model,
-            reward_model,
-            action_sequence,
-            state,
-            termination_model,
+            dynamical_model, reward_model, action_sequence, state, termination_model,
         ),
         dim=-2,
     )

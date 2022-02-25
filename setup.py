@@ -18,6 +18,7 @@ extras = {
         "seaborn>=0.9.0",
         # "gym-minigrid>=1.0",
     ],
+    "experiments": ["argparse-dataclass>=0.2", "lsf-runner>=0.0.5"],
 }
 extras["all"] = [item for group in extras.values() for item in group]
 
@@ -29,6 +30,7 @@ setup(
     license="MIT",
     python_requires=">=3.7.0",
     packages=find_packages(exclude=["docs"]),
+    extras_require=extras,
     install_requires=[
         "rllib @ git+ssh://git@github.com/sebascuri/rllib@dev#egg=rllib",
         "hucrl @ git+ssh://git@github.com/sebascuri/hucrl@dev#egg=hucrl",

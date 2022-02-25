@@ -1,9 +1,10 @@
 """Run the main experiment."""
-from builder import parser, AgentBuilder
+from builder import AgentBuilder
 from saferl.environment.pitch_control import PitchControlBuilder
 from utilities import plot_pitch_angle_callback
 from saferl.utilities.utilities import compute_constraint_violation
 from rllib.util.rollout import rollout_agent
+from examples.utilities import parser
 
 if __name__ == "__main__":
 
@@ -15,11 +16,11 @@ if __name__ == "__main__":
     agent = agent_builder.create_agent(
         environment=env,
         reward_model=environment_builder.get_reward_model(),
-        exploration_episodes=5,
-        model_learn_exploration_episodes=4,
+        exploration_episodes=1,
+        model_learn_exploration_episodes=1,
         pre_train_iterations=100,
-        num_model_steps=1,
-        num_particles=1,
+        num_model_steps=2,
+        num_particles=10,
         num_epochs=1,
         target_entropy=-1.0,
         entropy_regularization=False,  # entropy constraint.
